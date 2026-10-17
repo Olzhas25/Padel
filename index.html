@@ -103,6 +103,7 @@ td.pts{font-weight:700;color:var(--court)}
 .btn.wa{background:var(--win);border-color:var(--win);color:#fff;text-decoration:none;display:inline-flex;align-items:center}
 .btn.main{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .share textarea{width:100%;min-height:64px;font:12px var(--f-num);border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);padding:8px;resize:vertical}
+.share img{width:100%;display:block;border-radius:10px;border:1px solid var(--line);background:var(--bg);min-height:160px}
 .toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:600;font-size:14px;z-index:20;max-width:calc(100% - 32px);text-align:center}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -120,14 +121,14 @@ td.pts{font-weight:700;color:var(--court)}
 </div>
 
 <script>
-const PAIRS=["Нурбек/Олжас","Нурлан/Алибек","Стас/Рус","Еркежан/Али","Алишер/Султан","Виталий/Болат"];
+const PAIRS=["Нурбек/Олжас","Нурлан/Алибек","Стас/Рус","Еркежан/Али","Алишер/Султан","Виталий/Ильяс"];
 const P=n=>PAIRS.indexOf(n);
 const ROUNDS=[
- [["Нурбек/Олжас","Нурлан/Алибек"],["Стас/Рус","Еркежан/Али"],["Алишер/Султан","Виталий/Болат"]],
- [["Нурбек/Олжас","Еркежан/Али"],["Нурлан/Алибек","Виталий/Болат"],["Стас/Рус","Алишер/Султан"]],
- [["Нурбек/Олжас","Виталий/Болат"],["Еркежан/Али","Алишер/Султан"],["Нурлан/Алибек","Стас/Рус"]],
- [["Нурбек/Олжас","Алишер/Султан"],["Виталий/Болат","Стас/Рус"],["Еркежан/Али","Нурлан/Алибек"]],
- [["Нурбек/Олжас","Стас/Рус"],["Алишер/Султан","Нурлан/Алибек"],["Виталий/Болат","Еркежан/Али"]]
+ [["Нурбек/Олжас","Нурлан/Алибек"],["Стас/Рус","Еркежан/Али"],["Алишер/Султан","Виталий/Ильяс"]],
+ [["Нурбек/Олжас","Еркежан/Али"],["Нурлан/Алибек","Виталий/Ильяс"],["Стас/Рус","Алишер/Султан"]],
+ [["Нурбек/Олжас","Виталий/Ильяс"],["Еркежан/Али","Алишер/Султан"],["Нурлан/Алибек","Стас/Рус"]],
+ [["Нурбек/Олжас","Алишер/Султан"],["Виталий/Ильяс","Стас/Рус"],["Еркежан/Али","Нурлан/Алибек"]],
+ [["Нурбек/Олжас","Стас/Рус"],["Алишер/Султан","Нурлан/Алибек"],["Виталий/Ильяс","Еркежан/Али"]]
 ];
 const MATCHES=[];ROUNDS.forEach((r,ri)=>r.forEach((m,ci)=>MATCHES.push({id:ri+"-"+ci,round:ri,court:ci+1,a:P(m[0]),b:P(m[1])})));
 
@@ -266,15 +267,83 @@ function importFromHash(){
 }
 function toast(msg){const t=document.createElement("div");t.className="toast";t.setAttribute("role","status");t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2800)}
 function shareHTML(){
-  return`<div class="share" id="share"><div class="share-h">Поделиться счётом</div>
+  return`<div class="share" id="imgBox"><div class="share-h">Картинка с итогами</div>
+  <img id="resImg" alt="Итоги: таблица и шахматка">
+  <div class="share-btns"><button class="btn wa" id="imgShare">Отправить картинку</button></div>
+  <p>Откроется меню «Поделиться» — выберите WhatsApp. Если не открылось: нажмите и удерживайте картинку → «Сохранить» или «Поделиться».</p></div>
+  <div class="share" id="share"><div class="share-h">Ссылка со счётом</div>
   <p>Отправьте ссылку в чат. У того, кто её откроет, ваши результаты добавятся к его счёту (совпадающие матчи заменятся).</p>
   <div class="share-btns"><a class="btn wa" id="waLink" href="https://wa.me/?text=${encodeURIComponent(shareText())}" target="_blank" rel="noopener">Отправить в WhatsApp</a>
   <button class="btn main" id="copyBtn">Скопировать</button></div>
   <textarea id="shareTxt" readonly aria-label="Текст для отправки">${esc(shareText())}</textarea></div>`;
 }
 
-function render(){renderTabs();S.tab===5?renderStandings():renderRound(S.tab);
-  $("#view").insertAdjacentHTML("beforeend",shareHTML())}
+function render(){renderTabs();if(S.tab===5){renderStandings();$("#actions").insertAdjacentHTML("beforebegin",shareHTML());buildImage()}else renderRound(S.tab)}
+let imgBlob=null,imgURL=null,imgJob=0;
+function rrect(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath()}
+async function buildImage(){
+  const job=++imgJob;
+  try{await Promise.all(["700 54px Unbounded","500 22px Unbounded","700 28px Manrope","600 28px Manrope","400 22px Manrope"].map(f=>document.fonts.load(f)))}catch(e){}
+  const T=standings(),done=MATCHES.filter(m=>evalMatch(m.id).state==="done").length;
+  const W=1080,P=48,rowH=74,mRow=68,headH=56,mHead=84;
+  const H=200+36+56+headH+6*rowH+44+56+mHead+6*mRow+110;
+  const c=document.createElement("canvas");c.width=W;c.height=H;const g=c.getContext("2d");
+  const C={bg:"#eef3f1",card:"#ffffff",line:"#d3dfda",fg:"#10221d",mut:"#5b6f69",court:"#1f6b8f",ball:"#d7e84a",win:"#1b7f4e",bad:"#b3261e",self:"#e3ebe8"};
+  const FD='"Unbounded", system-ui, sans-serif',FB='"Manrope", system-ui, sans-serif';
+  g.fillStyle=C.bg;g.fillRect(0,0,W,H);
+  g.fillStyle=C.court;g.fillRect(0,0,W,200);
+  g.fillStyle=C.ball;g.beginPath();g.arc(W-30,20,140,0,Math.PI*2);g.fill();
+  g.strokeStyle="rgba(255,255,255,.55)";g.lineWidth=5;g.beginPath();g.arc(W-30,20,104,Math.PI*.55,Math.PI*1.05);g.stroke();
+  g.fillStyle="#fff";g.textAlign="left";g.font=`700 54px ${FD}`;g.fillText("Падел · итоги",P,102);
+  g.globalAlpha=.85;g.font=`600 28px ${FB}`;g.fillText(`17 октября 2026 · ${done===15?"все 15 матчей сыграны":"сыграно "+done+" из 15"}`,P,152);g.globalAlpha=1;
+  let y=236;
+  const label=t=>{g.fillStyle=C.mut;g.textAlign="left";g.font=`500 22px ${FD}`;g.fillText(t,P+4,y+32);y+=56};
+  // standings card
+  label("ТАБЛИЦА");
+  const cw=W-2*P,ch=headH+6*rowH;
+  g.save();rrect(g,P,y,cw,ch,24);g.fillStyle=C.card;g.fill();g.clip();
+  const cols=[["#",P+46,"center"],["ПАРА",P+100,"left"],["И",640,"center"],["ПОБ",722,"center"],["ПОР",804,"center"],["ГЕЙМЫ",900,"center"],["±",988,"center"]];
+  g.font=`700 19px ${FB}`;g.fillStyle=C.mut;cols.forEach(([t,x,a])=>{g.textAlign=a;g.fillText(t,x,y+36)});
+  let ry=y+headH;
+  T.forEach((t,k)=>{
+    if(done&&t.place===1){g.fillStyle=C.ball;g.fillRect(P,ry,cw,rowH)}
+    g.fillStyle=C.line;g.fillRect(P,ry,cw,1.5);
+    const mid=ry+rowH/2+10;
+    g.textAlign="center";g.fillStyle=C.fg;g.font=`700 30px ${FD}`;g.fillText(String(t.place),P+46,mid+1);
+    g.textAlign="left";g.font=`700 30px ${FB}`;g.fillText(t.n,P+100,mid);
+    g.textAlign="center";g.font=`600 28px ${FB}`;g.fillStyle=C.fg;
+    g.fillText(String(t.p),640,mid);
+    g.font=`800 30px ${FB}`;g.fillStyle=(done&&t.place===1)?C.fg:C.court;g.fillText(String(t.w),722,mid);
+    g.font=`600 28px ${FB}`;g.fillStyle=C.fg;g.fillText(String(t.l),804,mid);g.fillText(`${t.gw}–${t.gl}`,900,mid);
+    g.font=`700 28px ${FB}`;g.fillStyle=t.gd>0?C.win:t.gd<0?C.bad:C.mut;g.fillText(t.gd>0?"+"+t.gd:String(t.gd),988,mid);
+    ry+=rowH});
+  g.restore();rrect(g,P,y,cw,ch,24);g.strokeStyle=C.line;g.lineWidth=2;g.stroke();
+  y+=ch+44;
+  // matrix card
+  label("ШАХМАТКА");
+  const nameW=300,cellW=(cw-nameW)/6,mh=mHead+6*mRow;
+  g.save();rrect(g,P,y,cw,mh,24);g.fillStyle=C.card;g.fill();g.clip();
+  PAIRS.forEach((n,j)=>{const [f,s2]=n.split("/"),x=P+nameW+cellW*j+cellW/2;
+    g.textAlign="center";g.fillStyle=C.mut;g.font=`700 19px ${FB}`;g.fillText(f,x,y+38);g.fillText(s2||"",x,y+64)});
+  PAIRS.forEach((n,i)=>{const yy=y+mHead+i*mRow;g.fillStyle=C.line;g.fillRect(P,yy,cw,1.5);
+    g.textAlign="left";g.fillStyle=C.fg;g.font=`700 25px ${FB}`;g.fillText(n,P+24,yy+mRow/2+9);
+    PAIRS.forEach((_,j)=>{const x=P+nameW+cellW*j;
+      if(i===j){g.fillStyle=C.self;g.fillRect(x+1,yy+1.5,cellW-2,mRow-1.5);return}
+      const m=MATCHES.find(q=>(q.a===i&&q.b===j)||(q.a===j&&q.b===i)),r=evalMatch(m.id);
+      g.textAlign="center";
+      if(r.state!=="done"){g.fillStyle=C.line;g.font=`700 26px ${FB}`;g.fillText("—",x+cellW/2,yy+mRow/2+9);return}
+      const sc2=S.scores[m.id],mine=m.a===i?sc2.a:sc2.b,their=m.a===i?sc2.b:sc2.a,won=mine>their;
+      if(won){g.fillStyle="rgba(27,127,78,.10)";g.fillRect(x+1,yy+1.5,cellW-2,mRow-1.5)}
+      g.fillStyle=won?C.win:C.bad;g.font=`${won?800:600} 28px ${FB}`;g.fillText(`${mine}:${their}`,x+cellW/2,yy+mRow/2+10)})});
+  g.fillStyle=C.line;g.fillRect(P+nameW,y,1.5,mh);
+  g.restore();rrect(g,P,y,cw,mh,24);g.strokeStyle=C.line;g.lineWidth=2;g.stroke();
+  y+=mh+46;
+  g.textAlign="left";g.fillStyle=C.mut;g.font=`400 22px ${FB}`;
+  g.fillText("Сет до 5 геймов, при 4:4 решающий гейм. Места: победы → разница геймов",P+4,y);
+  g.fillText("→ выигранные геймы → личная встреча.",P+4,y+32);
+  c.toBlob(b=>{if(job!==imgJob||!b)return;imgBlob=b;if(imgURL)URL.revokeObjectURL(imgURL);imgURL=URL.createObjectURL(b);
+    const im=$("#resImg");if(im)im.src=imgURL},"image/png");
+}
 function refreshShare(){const w=$("#waLink"),t=$("#shareTxt");if(w)w.href="https://wa.me/?text="+encodeURIComponent(shareText());if(t)t.value=shareText()}
 
 document.addEventListener("click",e=>{
@@ -287,6 +356,10 @@ document.addEventListener("click",e=>{
     save();renderTabs();const m=MATCHES.find(x=>x.id===t.dataset.m);
     const el=document.getElementById("c-"+m.id);el.outerHTML=cardHTML(m);
     const again=document.querySelector(`.step[data-m="${m.id}"][data-s="${side}"][data-d="${d}"]`);again&&again.focus({preventScroll:true});refreshShare();return}
+  if(t.id==="imgShare"){if(!imgBlob){toast("Картинка ещё готовится");return}
+    const f=new File([imgBlob],"padel-itogi.png",{type:"image/png"});
+    try{if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(()=>{});return}}catch(e){}
+    toast("Нажмите и удерживайте картинку, чтобы сохранить");return}
   if(t.id==="copyBtn"){const txt=shareText(),ta=$("#shareTxt");
     const fallback=()=>{ta.focus();ta.select();toast("Текст выделен, скопируйте его")};
     try{navigator.clipboard.writeText(txt).then(()=>toast("Скопировано"),fallback)}catch(e){fallback()}return}
